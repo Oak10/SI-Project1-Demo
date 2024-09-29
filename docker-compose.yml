@@ -1,0 +1,49 @@
+version: '3.9'
+
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "25m"
+    max-file: "2"
+    tag: "{{.Name}}|{{.ImageName}}|{{.ID}}"
+
+services:
+  otel-collector:
+    image: signoz/signoz-otel-collector:0.102.4
+    command:
+      [
+        "--config=/etc/otel-collector-config.yaml",
+        "--copy-path=/var/tmp/collector-config.yaml",
+        "--feature-gates=-pkg.translator.prometheus.NormalizeName"
+      ]
+    user: root # required for reading docker container logs
+    volumes:
+      - /etc/otel-collector-config.yaml:/etc/otel-collector-config.yaml # Config file for collector (TODO: use configs)
+      - /var/run/docker.sock:/var/run/docker.sock:ro # Read containers metrics and logs
+      - /:/hostfs:ro # Read host metrics
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro # Read containers logs
+    environment:
+      - OTEL_RESOURCE_ATTRIBUTES=host.name={{.Node.Hostname}},os.type=linux
+      - DOCKER_MULTI_NODE_CLUSTER=false
+      - LOW_CARDINAL_EXCEPTION_GROUPING=false
+    restart: always
+    deploy:
+      mode: global
+      resources:
+        limits:
+          memory: '300m'
+    logging: *default-logging
+
+  app1:
+    image: claudiooak/demo-logs:0.0.1
+    environment:
+      - LOG_MESSAGE=Hello from app 1
+    restart: always
+    logging: *default-logging
+
+  app2:
+    image: claudiooak/demo-logs:0.0.1
+    environment:
+      - LOG_MESSAGE=Hello from app 2
+    restart: always
+    logging: *default-logging
